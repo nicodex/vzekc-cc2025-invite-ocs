@@ -1,0 +1,4 @@
+*.gpl text eol=lf
+*.license text eol=crlf
+*.png -text
+*.toml text

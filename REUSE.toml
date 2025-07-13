@@ -1,0 +1,32 @@
+version = 1
+
+[[annotations]]
+path = "vzekc-cc2025-invite-ocs-logo.png"
+# read "vzekc-cc2025-invite-ocs-logo.png.license"
+
+[[annotations]]
+path = "vzekc-cc2025-invite-ocs-poster.png"
+# read "vzekc-cc2025-invite-ocs-poster.png.license"
+
+[[annotations]]
+path = "vzekcc25-pal.rom"
+# read "vzekcc25-pal.rom.license"
+
+[[annotations]]
+path = "kickstart-vzekcc25-pal.adf"
+# read "kickstart-vzekcc25-pal.adf.license"
+
+[[annotations]]
+path = [
+ ".gitattributes",
+ ".gitignore",
+ "imagedat.py",
+ "kickstart.asm",
+ "vzekcc25.asm",
+ "vzekcc25-pal.rom.lst",
+ "Makefile",
+ "README.md",
+]
+SPDX-FileCopyrightText = "2025 Nico Bendlin <nico@nicode.net>"
+SPDX-License-Identifier = "CC0-1.0"
+
