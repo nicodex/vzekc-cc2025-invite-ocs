@@ -12,7 +12,9 @@
 	INCLUDE	hardware/dmabits.i
 	INCLUDE	hardware/intbits.i
 	INCLUDE	hardware/cia.i
+	INCLUDE	hardware/blit.i
 	INCLUDE	graphics/display.i
+
 DISPLAYPAL	EQU	$0020	; hardware/custom.h
 
 ;-----------------------------------------------------------------------------
@@ -91,7 +93,7 @@ RomBase:
 		dc.l   	ROM_256K          	; VEC_RESETSP
 		dc.l   	ColdStart         	; VEC_RESETPC
 		dcb.l  	1-2+11,RomExcept  	; VEC_BUSERR-VEC_LINE11
-		dc.l   	$79276A23         	; VEC_RESV12 (release chksum=0)
+		dc.l   	$CE48592D         	; VEC_RESV12 (release chksum=0)
 		dcb.l  	1-13+15,RomExcept 	; VEC_COPROC-VEC_UNINT
 0$:		dc.b   	'vzekcc25',0,0    	; VEC_RESV16-VEC_SPUR
 1$:		dc.w   	$4AFC             	; (RT_MATCHWORD=RTC_MATCHWORD)
@@ -119,8 +121,8 @@ RomExcept:
 		dc.l   	ColdReset         	; (exception ($02,sp))
 		dc.w   	(%0000<<12)!(31*4)	; (exception ($06,sp))
 RomTagStr:
-		dc.b   	'vzekcc25 0.1 (21.07.2025) PAL',13,10,0,0,'$VER: '
-		dc.b   	'vzekcc25 0.1 (21.07.2025) PAL',10
+		dc.b   	'vzekcc25 0.2 (21.07.2025) PAL',13,10,0,0,'$VER: '
+		dc.b   	'vzekcc25 0.2 (21.07.2025) PAL',10
 		dc.b   	'Licensed under'
 		dc.b   	' CC-BY-NC-SA-3.0-DE AND'
 		dc.b   	' CC-BY-NC-SA-3.0 AND'
@@ -148,7 +150,7 @@ RomTagStr:
 ;
 
 RomEntry:
-		move.w 	#$2700,sr     	; supervisor mode, IPL = 7 (only NMI)
+		move.w 	#$2700,sr     	; supervisor mode, IPL = 7
 		lea    	($DFF000).L,a6	; _custom
 		move.w 	#((~INTF_SETCLR)&$FFFF),(intena,a6)
 		move.w 	#((~INTF_SETCLR)&$FFFF),(intreq,a6)
@@ -158,12 +160,22 @@ InitScreen:
 		move.w 	#DISPLAYPAL,(beamcon0,a6)
 		move.l 	#((MODE_640!COLORON!INTERLACE)<<16),(bplcon0,a6)
 		move.w 	#%0100100,(bplcon2,a6)	; PFP=SP01/SP23/SP45/SP67/PF1
-		move.w 	#$0210,(color,a6)
+		lea    	(color,a6),a0
+		move.w 	#$0210,(a0)
 		move.w 	d0,(bpldat,a6)
+		lea    	(16*2,a0),a0
+		move.l 	#$09BC09AB,(a0)+
+		move.l 	#$099908CE,(a0)+
+		move.l 	#$08990888,(a0)+
+		move.l 	#$088206AC,(a0)+
+		move.l 	#$06660665,(a0)+
+		move.l 	#$06620654,(a0)+
+		move.l 	#$059B0542,(a0)+
+		move.l 	#$048A0444,(a0)
 InitVector:
 		lea    	($BFE001).L,a5    	; _ciaa
 		move.b 	#CIAF_LED!CIAF_OVERLAY,(ciaddra,a5)
-		bclr.b 	#CIAB_OVERLAY,(a5)	; ciapra
+		bclr.b 	#CIAB_OVERLAY,(a5)	; (ciapra,)
 		movea.l	d0,a0
 		move.l 	d0,(a0)+	; ZeroLocation
 		move.l 	d0,(a0)+	; AbsExecBase
@@ -176,7 +188,7 @@ InitVector:
 		move.l 	a1,(VecIntLevel3).w
 CopyCopper:
 		lea    	(RomCopper,pc),a1
-		moveq  	#((RomImages-RomCopper)/4)-1,d1
+		move.w 	#((RomImages-RomCopper)/4)-1,d1
 0$:		move.l 	(a1)+,(a0)+
 		dbf    	d1,0$
 MakeImage1:
@@ -359,14 +371,18 @@ CopyImage2:
 
 ;-----------------------------------------------------------------------------
 
-InitCopper:
-		move.w 	#$0002,(copcon,a6)
-		move.l 	#(RamCoperBase+(RomCop0_1-RomCopper)),(cop1lc,a6)
+InitBltCop:
+		move.l 	#(((BC0F_SRCA!BC0F_DEST!ABC!ABNC!ANBC!ANBNC)<<16)!(0)),(bltcon0,a6)
+		move.l 	#(((SCR1BPLMOD)<<16)!(SCR1BPLMOD)),(bltamod,a6)
+		move.l 	#((($FFFF)<<16)!($FFFF)),(bltafwm,a6)
+		move.w 	#$0002,(copcon,a6)	; CDANG (Copper blitter access)
+		move.l 	#((RomCop0_1-RomCopper)+RamCoperBase),(cop1lc,a6)
 		move.w 	#(INTF_SETCLR!INTF_INTEN!INTF_COPER),(intena,a6)
 EnableDMAs:
 		move.w 	#(DMAF_SETCLR!DMAF_BLITHOG!DMAF_MASTER!DMAF_RASTER!DMAF_COPPER!DMAF_BLITTER),(dmacon,a6)
 WaitForInt:
-		stop   	#$2200	; supervisor mode, IPL = 2 (only NMI)
+		; CPU off - wait for interrupt (IntLevel3)
+		stop   	#$2200	; supervisor mode, IPL = 2
 		bra.b  	WaitForInt
 
 ;-----------------------------------------------------------------------------
@@ -374,60 +390,110 @@ WaitForInt:
 IntLevel3:
 		btst.b 	#INTB_COPER,(intreqr+1,a6)
 		beq.b  	1$
+		;TODO: handle screen states/switches
 		btst.b 	#(15-8),(vposr+0,a6)	; LOL
 		beq.b  	0$
-		move.l 	#(RamCoperBase+(RomCop1_2L-RomCopper)),(cop2lc,a6)
-		move.l 	#(RamCoperBase+(RomCop1_1-RomCopper)),(cop1lc,a6)
+		move.l 	#((RomCop1_2L-RomCopper)+RamCoperBase),(cop2lc,a6)
+		move.l 	#((RomCop1_1-RomCopper)+RamCoperBase),(cop1lc,a6)
 0$:		move.w 	#INTF_COPER,(intreq,a6)
 1$:		rte
 
 ;-----------------------------------------------------------------------------
 
 RomCopper:
+CIR1F_WAIT	EQU	($0001)
+CIR2F_BFD	EQU	($8000)
 
 RomCop0_1:
-		dc.w	$FFDF,$FFFE
-		dc.w	intreq,(INTF_SETCLR!INTF_COPER)
-		dc.w	$FFFF,$FFFE
+		dc.w	CIR1F_WAIT!$FFDE,$7FFE!CIR2F_BFD
+		dc.w	(intreq),(INTF_SETCLR!INTF_COPER)
+		dc.w	CIR1F_WAIT!$FFFE,$7FFE!CIR2F_BFD
 
 RomCop1_1:
-		dc.w	(0*2+color),$0210
-		dc.w	(1*2+color),$0322
-		dc.w	(2*2+color),$0432
-		dc.w	(3*2+color),$0433
-		dc.w	(4*2+color),$0543
-		dc.w	(5*2+color),$0654
-		dc.w	(6*2+color),$0765
-		dc.w	(7*2+color),$0876
-		dc.w	(8*2+color),$0a63
-		dc.w	(9*2+color),$0b74
-		dc.w	(10*2+color),$0a87
-		dc.w	(11*2+color),$0b98
-		dc.w	(12*2+color),$0ca8
-		dc.w	(13*2+color),$0db9
-		dc.w	(14*2+color),$0eca
-		dc.w	(15*2+color),$0fdb
-		dc.w	bplcon0,(MODE_640!(4<<PLNCNTSHFT)!COLORON!INTERLACE)
-		dc.w	diwstrt,$2C81
-		dc.w	diwstop,$2CC1
-		dc.w	ddfstrt,$003C
-		dc.w	ddfstop,$00D4
-		dc.w	bpl1mod,SCR1BPLMOD
-		dc.w	bpl2mod,SCR1BPLMOD
-		dc.w   	copjmp2,0
+		dc.w	(color+0*2),$0210
+		dc.w	(color+1*2),$0322
+		dc.w	(color+2*2),$0432
+		dc.w	(color+3*2),$0433
+		dc.w	(color+4*2),$0543
+		dc.w	(color+5*2),$0654
+		dc.w	(color+6*2),$0765
+		dc.w	(color+7*2),$0876
+		dc.w	(color+8*2),$0A63
+		dc.w	(color+9*2),$0B74
+		dc.w	(color+10*2),$0A87
+		dc.w	(color+11*2),$0B98
+		dc.w	(color+12*2),$0CA8
+		dc.w	(color+13*2),$0DB9
+		dc.w	(color+14*2),$0ECA
+		dc.w	(color+15*2),$0FDB
+		dc.w	(bplcon0),(MODE_640!(4<<PLNCNTSHFT)!COLORON!INTERLACE)
+		dc.w	(diwstrt),$2C81
+		dc.w	(diwstop),$2CC1
+		dc.w	(ddfstrt),$003C
+		dc.w	(ddfstop),$00D4
+		dc.w	(bpl1mod),SCR1BPLMOD
+		dc.w	(bpl2mod),SCR1BPLMOD
+		dc.w   	(copjmp2),0
 RomCop1_2U:
-		dc.w	(cop2lc+2),(RamCoperBase+(RomCop1_2L-RomCopper))
-		dc.w	(0*4+bplpt+0),(Scr1Bpl1Dat0>>16)
-		dc.w	(0*4+bplpt+2),(Scr1Bpl1Dat0&$FFFF)
-		dc.w	(1*4+bplpt+0),(Scr1Bpl2Dat0>>16)
-		dc.w	(1*4+bplpt+2),(Scr1Bpl2Dat0&$FFFF)
-		dc.w	(2*4+bplpt+0),(Scr1Bpl3Dat0>>16)
-		dc.w	(2*4+bplpt+2),(Scr1Bpl3Dat0&$FFFF)
-		dc.w	(3*4+bplpt+0),(Scr1Bpl4Dat0>>16)
-		dc.w	(3*4+bplpt+2),(Scr1Bpl4Dat0&$FFFF)
-		dc.w	$FFFF,$FFFE
+		dc.w	(cop2lc+2),((RomCop1_2L-RomCopper)+RamCoperBase)
+		dc.w	(bplpt+0*4+0),(Scr1Bpl1Dat0>>16)
+		dc.w	(bplpt+0*4+2),(Scr1Bpl1Dat0&$FFFF)
+		dc.w	(bplpt+1*4+0),(Scr1Bpl2Dat0>>16)
+		dc.w	(bplpt+1*4+2),(Scr1Bpl2Dat0&$FFFF)
+		dc.w	(bplpt+2*4+0),(Scr1Bpl3Dat0>>16)
+		dc.w	(bplpt+2*4+2),(Scr1Bpl3Dat0&$FFFF)
+		dc.w	(bplpt+3*4+0),(Scr1Bpl4Dat0>>16)
+		dc.w	(bplpt+3*4+2),(Scr1Bpl4Dat0&$FFFF)
+		; CCITT	step #2/2 (bitplane 3/4)
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl3Dat1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl3Dat1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl3Dat0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl3Dat0&$FFFF)
+		dc.w	(bltsize),((SCR1HEIGHT<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl4Dat1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl4Dat1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl4Dat0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl4Dat0&$FFFF)
+		dc.w	(bltsize),((SCR1HEIGHT<<HSIZEBITS)!(3))
+		; CCITT	step #3 (set bottom/right)
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl1Rot1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl1Rot1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl1Rot0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl1Rot0&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl2Rot1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl2Rot1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl2Rot0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl2Rot0&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl3Rot1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl3Rot1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl3Rot0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl3Rot0&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl4Rot1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl4Rot1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl4Rot0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl4Rot0&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+	;	dc.w	CIR1F_WAIT!$0000,$0000
+	;	dc.w	CIR1F_WAIT!$0000,$0000
+	;	dc.w	(intreq),(INTF_SETCLR!INTF_COPER)
+		dc.w	CIR1F_WAIT!$FFFE,$7FFE!CIR2F_BFD
 RomCop1_2L:
-		dc.w	(cop2lc+2),(RamCoperBase+(RomCop1_2U-RomCopper))
+		dc.w	(cop2lc+2),((RomCop1_2U-RomCopper)+RamCoperBase)
 		dc.w	(0*4+bplpt+0),(Scr1Bpl1Dat1>>16)
 		dc.w	(0*4+bplpt+2),(Scr1Bpl1Dat1&$FFFF)
 		dc.w	(1*4+bplpt+0),(Scr1Bpl2Dat1>>16)
@@ -436,7 +502,54 @@ RomCop1_2L:
 		dc.w	(2*4+bplpt+2),(Scr1Bpl3Dat1&$FFFF)
 		dc.w	(3*4+bplpt+0),(Scr1Bpl4Dat1>>16)
 		dc.w	(3*4+bplpt+2),(Scr1Bpl4Dat1&$FFFF)
-		dc.w	$FFFF,$FFFE
+		; CCITT	step #1 (save top/left)
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl1Dat0>>16)
+		dc.w	(bltapt+2),(Scr1Bpl1Dat0&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl1Rot1>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl1Rot1&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl2Dat0>>16)
+		dc.w	(bltapt+2),(Scr1Bpl2Dat0&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl2Rot1>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl2Rot1&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl3Dat0>>16)
+		dc.w	(bltapt+2),(Scr1Bpl3Dat0&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl3Rot1>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl3Rot1&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl4Dat0>>16)
+		dc.w	(bltapt+2),(Scr1Bpl4Dat0&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl4Rot1>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl4Rot1&$FFFF)
+		dc.w	(bltsize),((1<<HSIZEBITS)!(3))
+		; CCITT	step #2/1 (bitplanes 1/2)
+		dc.w	CIR1F_WAIT!$FB1C,$7FFE!CIR2F_BFD
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl1Dat1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl1Dat1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl1Dat0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl1Dat0&$FFFF)
+		dc.w	(bltsize),((SCR1HEIGHT<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	(bltapt+0),(Scr1Bpl2Dat1>>16)
+		dc.w	(bltapt+2),(Scr1Bpl2Dat1&$FFFF)
+		dc.w	(bltdpt+0),(Scr1Bpl2Dat0>>16)
+		dc.w	(bltdpt+2),(Scr1Bpl2Dat0&$FFFF)
+		dc.w	(bltsize),((SCR1HEIGHT<<HSIZEBITS)!(3))
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$0000,$0000
+		dc.w	CIR1F_WAIT!$FFFE,$7FFE!CIR2F_BFD
 
 ;-----------------------------------------------------------------------------
 

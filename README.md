@@ -5,11 +5,10 @@ This is WORK IN PROGRESS... one day it'll be a Kickstart disk for the Amiga 1000
 that invites you to the [CC2025](https://www.classic-computing.de/cc2025/).
 
 TODO:  
-  - animate CCITT-2 code
   - scroll-in 2nd screen
   - move poster up/down
-  - scroll-in 1nd screen
-  - logo cinematic effet
+  - scroll-in 1st screen
+  - logo cinematic effect
   - logo cinematic sound
 
 Legal
@@ -21,8 +20,8 @@ This work is:
   - Copyright 2025 Konstantin Weiss <k@konstantinweiss.com>
 
 Licensed under:  
-  - CC-BY-NC-SA-3.0 AND
   - CC-BY-NC-SA-3.0-DE AND
+  - CC-BY-NC-SA-3.0 AND
   - CC-BY-NC-SA-4.0 AND
   - CC0-1.0
 
