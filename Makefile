@@ -41,8 +41,8 @@ imagedat.i: vzekc-cc2025-invite-ocs-logo.png vzekc-cc2025-invite-ocs-poster.png
 kickstart-vzekcc25-pal.adf : kickstart.asm vzekcc25-pal.rom
 	$(VASM) -Fbin $(VASM_OPTS) -o $@ $<
 
-vzekcc25-pal.rom : vzekcc25.asm imagedat.i
-	$(VASM) -Fbin $(VASM_OPTS) -L $@.lst -Lni -Lns -o $@ $<
+vzekcc25-pal.rom : vzekcc25.asm imagedat.i Makefile
+	$(VASM) -Fbin $(VASM_OPTS) -L $@.lst -Lbpl=10 -Lni -Lns -o $@ $<
 
 winuae/$(WINUAE_ZIP):
 	mkdir -p winuae && cd winuae && wget $(WINUAE_URL)
@@ -60,6 +60,8 @@ WINUAE_OPT_GUI = \
 
 WINUAE_WIDTH ?= 1920
 WINUAE_HEIGHT ?= 1080
+WINUAE_WIDTH_WINDOWED ?= $(if $(WINUAE_DBG:true=),692,769)
+WINUAE_HEIGHT_WINDOWED ?= $(if $(WINUAE_DBG:true=),523,624)
 WINUAE_API ?= direct3d
 WINUAE_API_OPT ?= hardware
 WINUAE_FULLSCREEN ?= $(if $(WINUAE_DBG:true=),true,false)
@@ -68,13 +70,13 @@ WINUAE_OPT_GFX = \
 	-s gfx_display=0 \
 	-s gfx_width=$(WINUAE_WIDTH) \
 	-s gfx_height=$(WINUAE_HEIGHT) \
-	-s gfx_width_windowed=784 \
-	-s gfx_height_windowed=636 \
+	-s gfx_width_windowed=$(WINUAE_WIDTH_WINDOWED) \
+	-s gfx_height_windowed=$(WINUAE_HEIGHT_WINDOWED) \
 	-s gfx_lores=false \
 	-s gfx_resolution=hires \
 	-s gfx_lores_mode=normal \
 	-s gfx_flickerfixer=false \
-	-s gfx_linemode=double \
+	-s gfx_linemode=scanlines2p2 \
 	-s gfx_center_horizontal=none \
 	-s gfx_center_vertical=none \
 	-s gfx_api=$(WINUAE_API) \

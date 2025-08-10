@@ -23,7 +23,7 @@ Licensed under:
   - CC-BY-NC-SA-3.0-DE AND
   - CC-BY-NC-SA-3.0 AND
   - CC-BY-NC-SA-4.0 AND
-  - CC0-1.0
+  - 0BSD
 
 You have to comply to all licenses to use this work.
 
@@ -39,4 +39,4 @@ It includes:
     by Konstantin Weiss <k@konstantinweiss.com>,
     used under CC BY-NC-SA 3.0
 
-Everything else is licensed under CC0 1.0 by Nico Bendlin <nico@nicode.net>
+Everything else is licensed under Zero-Clause BSD by Nico Bendlin <nico@nicode.net>

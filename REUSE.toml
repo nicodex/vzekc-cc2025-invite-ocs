@@ -28,5 +28,5 @@ path = [
  "README.md",
 ]
 SPDX-FileCopyrightText = "2025 Nico Bendlin <nico@nicode.net>"
-SPDX-License-Identifier = "CC0-1.0"
+SPDX-License-Identifier = "0BSD"
 
